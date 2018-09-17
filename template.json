@@ -20,13 +20,23 @@
 ,
       "ConstraintDescription" : "must be a valid EC2 instance type."
     },
-
     "KeyName": {
       "Description" : "Name of an existing EC2 KeyPair to enable SSH access to the instance",
       "Type": "AWS::EC2::KeyPair::KeyName",
       "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
     },
-
+    "DBUser": {
+      "Description" : "User Name for the database",
+      "Type": "String",
+      "Default" : "Admin"
+    },
+    "DBPass": {
+      "Description" : "Password for the database user",
+      "Type": "String",
+      "Default" : "Password",
+      "MinLength": "8",
+      "ConstraintDescription": "must be 8 or more characters long"
+    },
     "SSHLocation" : {
       "Description" : "The office gateway IP address to allow SSH to the EC2 QA instance",
       "Type": "String",
@@ -379,7 +389,7 @@
       "Properties" : {
         "NetworkAclId" : {"Ref" : "NetworkAclWAN"},
         "RuleNumber" : "100",
-        "Protocol" : "6",
+        "Protocol" : "-1",
         "RuleAction" : "allow",
         "Egress" : "false",
         "CidrBlock" : "0.0.0.0/0",
@@ -415,7 +425,7 @@
       "Properties" : {
         "NetworkAclId" : {"Ref" : "NetworkAclWAN"},
         "RuleNumber" : "100",
-        "Protocol" : "6",
+        "Protocol" : "-1",
         "RuleAction" : "allow",
         "Egress" : "true",
         "CidrBlock" : "0.0.0.0/0",
@@ -475,7 +485,7 @@
       "Properties" : {
         "NetworkAclId" : {"Ref" : "NetworkAclPrivate"},
         "RuleNumber" : "100",
-        "Protocol" : "6",
+        "Protocol" : "-1",
         "RuleAction" : "allow",
         "Egress" : "false",
         "CidrBlock" : "0.0.0.0/0",
@@ -511,7 +521,7 @@
       "Properties" : {
         "NetworkAclId" : {"Ref" : "NetworkAclPrivate"},
         "RuleNumber" : "100",
-        "Protocol" : "6",
+        "Protocol" : "-1",
         "RuleAction" : "allow",
         "Egress" : "true",
         "CidrBlock" : "0.0.0.0/0",
@@ -614,7 +624,7 @@
 
   "WebServerFleet" : {
     "Type" : "AWS::AutoScaling::AutoScalingGroup",
-    "DependsOn" : "RouteWAN",
+    "DependsOn" : [ "RouteNAT01", "RouteNAT02" ],
     "Properties" : {
       "VPCZoneIdentifier" : [{ "Ref" : "SubnetPrivate01" }, { "Ref" : "SubnetPrivate02" }],
       "LaunchConfigurationName" : { "Ref" : "WebServerLaunchConfig"  },
@@ -622,26 +632,68 @@
       "MaxSize" : "10",
       "DesiredCapacity" : "2",
       "TargetGroupARNs" : [ { "Ref" : "ALBTargetGroup" } ],
+      "HealthCheckGracePeriod" : "120",
+      "MetricsCollection" : { "Granularity" : "5Minute", "Metrics" : [ "CPUUtilization" ] },
       "Tags" : [ { "Key" : "Network", "Value" : "Public", "PropagateAtLaunch" : "true" } ]
-    },
-    "CreationPolicy" : {
-      "ResourceSignal" : {
-        "Timeout" : "PT45M",
-        "Count"   : "2"
-      }
-    },
-    "UpdatePolicy": {
-      "AutoScalingRollingUpdate": {
-        "MinInstancesInService": "2",
-        "MaxBatchSize": "1",
-        "PauseTime" : "PT15M",
-        "WaitOnResourceSignals": "true"
-      }
     }
   },
-
+  "ScaleUpPolicy" : {
+     "Type" : "AWS::AutoScaling::ScalingPolicy",
+     "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "WebServerFleet" },
+        "Cooldown" : "180",
+        "ScalingAdjustment" : "1"
+     }
+  },
+  "CPUAlarmHigh": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "EvaluationPeriods": "3",
+        "Statistic": "Average",
+        "Threshold": "80",
+        "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+        "Period": "60",
+        "AlarmActions": [ { "Ref": "ScaleUpPolicy" } ],
+        "Namespace": "AWS/EC2",
+        "Dimensions": [ {
+           "Name": "WebServerFleet",
+           "Value": { "Ref": "WebServerFleet" }
+        } ],
+        "ComparisonOperator": "GreaterThanThreshold",
+        "MetricName": "CPUUtilization"
+     }
+  },
+  "ScaleDownPolicy" : {
+     "Type" : "AWS::AutoScaling::ScalingPolicy",
+     "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "WebServerFleet" },
+        "Cooldown" : "180",
+        "ScalingAdjustment" : "-1"
+     }
+  },
+  "CPUAlarmLow": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "EvaluationPeriods": "5",
+        "Statistic": "Average",
+        "Threshold": "60",
+        "AlarmDescription": "Alarm if CPU is low or metric disappears indicating instance is down",
+        "Period": "60",
+        "AlarmActions": [ { "Ref": "ScaleDownPolicy" } ],
+        "Namespace": "AWS/EC2",
+        "Dimensions": [ {
+           "Name": "WebServerFleet",
+           "Value": { "Ref": "WebServerFleet" }
+        } ],
+        "ComparisonOperator": "LessThanThreshold",
+        "MetricName": "CPUUtilization"
+     }
+  },
   "WebServerLaunchConfig"  : {
     "Type" : "AWS::AutoScaling::LaunchConfiguration",
+    "DependsOn" : "Database",
     "Properties" : {
       "ImageId"        : "ami-0ff8a91507f77f867",
       "SecurityGroups" : [ { "Ref" : "WebServerSecurityGroup" } ],
@@ -650,9 +702,11 @@
       "AssociatePublicIpAddress" : "true",
       "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
              "#!/bin/bash -xe\n",
+             "yum -y update\n",
+             "yum clean all\n",
              "yum -y install httpd\n",
              "echo hello > /var/www/html/index.html\n",
-             "/etc/init.d/httpd start\n",
+             "/etc/init.d/httpd start\n"
         ]]}}
     }
   },
@@ -678,7 +732,6 @@
                                 "OriginProtocolPolicy": "http-only"
                             }
                         }],
-                        "Aliases" : [ "onica-dev.danielmassey.com", "onica-api.danielmassey.com" ],
                         "Enabled" : "true",
                         "Comment" : "Onica cloudfront to LB",
                         "DefaultRootObject" : "index.html",
@@ -693,6 +746,40 @@
                        "ViewerCertificate" : { "CloudFrontDefaultCertificate" : "true" }
                     }
                 }
+            },
+            "DBSubnetGroup" : {
+               "Type" : "AWS::RDS::DBSubnetGroup",
+               "Properties" : {
+                  "DBSubnetGroupDescription" : "onica",
+                  "DBSubnetGroupName" : "onica",
+                  "SubnetIds" : [ { "Ref" : "SubnetPrivate01" } , { "Ref" : "SubnetPrivate02" } ],
+                  "Tags" : [ { "Key" : "Name", "Value" : "onica DB subnet group" } ]
+               }
+            },
+            "DBInstanceSecurityGroup" : {
+              "Type" : "AWS::EC2::SecurityGroup",
+              "Properties" : {
+                "VpcId" : { "Ref" : "VPC" },
+                "GroupDescription" : "DB security group",
+                "SecurityGroupIngress" : [
+                  { "IpProtocol" : "tcp", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0"}
+                 ]
+              }
+            },
+            "Database" : {
+               "Type" : "AWS::RDS::DBInstance",
+               "Properties" : {
+                  "DBName" : "onicaDB",
+                  "AllocatedStorage" : "100",
+                  "DBInstanceClass" : "db.t2.micro",
+                  "Engine" : "MySQL",
+                  "MasterUsername" : { "Ref" : "DBUser" },
+                  "MasterUserPassword" : { "Ref" : "DBPass" },
+                  "MultiAZ" : "true",
+                  "DBSubnetGroupName" : { "Ref" : "DBSubnetGroup" },
+                  "VPCSecurityGroups" : [ { "Ref" : "DBInstanceSecurityGroup" } ],
+                  "Tags" : [ { "Key" : "Name", "Value" : "My SQL Database" } ]
+               }
             }
 
  },
@@ -704,7 +791,10 @@
     "CloudFrontURL" : {
       "Description" : "CloudFront URL",
       "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "CloudfrontDistribution", "DomainName" ]}]]}
+    },
+    "DatabaseURL" : {
+      "Description" : "CloudFront URL",
+      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "Database", "Endpoint.Address" ]}]]}
     }
   }
 }
-
