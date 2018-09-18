@@ -1,7 +1,7 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
 
-  "Description" : "AWS CloudFormation Sample Template VPC_Single_Instance_In_Subnet: Sample template showing how to create a VPC and add an EC2 instance with an Elastic IP address and a security group. **WARNING** This template creates an Amazon EC2 instance. You will be billed for the AWS resources used if you create a stack from this template.",
+  "Description" : "Daniel Massey - AWS CloudFormation template to build HA scalable WordPress App",
 
   "Parameters" : {
     "QAType" : {
@@ -221,6 +221,7 @@
       "Type" : "AWS::EC2::VPC",
       "Properties" : {
         "CidrBlock" : "10.0.0.0/16",
+        "EnableDnsHostnames" : true,
         "Tags" : [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} }, {"Key" : "Name", "Value" : "onica-VPC" } ]
       }
     },
@@ -592,7 +593,7 @@
           "yum -y install httpd mysql php php-mysql git amazon-efs-utils nfs-utils\n",
           "mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ",
           { "Ref" : "EFS" },
-          "efs.us-east-1.amazonaws.com:/ /var/www/html/\n",
+          ".efs.us-east-1.amazonaws.com:/ /var/www/html/\n",
           "git clone https://github.com/danielmassey/onica-app /var/www/onica-app\n",
           "cp -r /var/www/onica-app/* /var/www/html/\n",
           "mv /var/www/html/wp-config-sample.php /var/www/html/wp-config.php\n",
@@ -606,7 +607,7 @@
           "sed -i 's/database_password_here/",
           { "Ref" : "DBPass" },
           "/g' /var/www/html/wp-config.php\n",
-          "sed -i 's/database_host_here/\n",
+          "sed -i 's/database_host_here/",
           { "Fn::GetAtt" : [ "Database", "Endpoint.Address" ]},
           "/g' /var/www/html/wp-config.php\n",
           "/etc/init.d/httpd restart\n"
@@ -757,7 +758,7 @@
         "yum -y install httpd mysql php php-mysql git amazon-efs-utils nfs-utils\n",
         "mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ",
         { "Ref" : "EFS" },
-        "efs.us-east-1.amazonaws.com:/ /var/www/html/\n",
+        ".efs.us-east-1.amazonaws.com:/ /var/www/html/\n",
         "/etc/init.d/httpd restart\n"
         ]]}},
     }
@@ -821,7 +822,7 @@
             "Database" : {
                "Type" : "AWS::RDS::DBInstance",
                "Properties" : {
-                  "DBName" : "onicaDB",
+                  "DBName" : { "Ref" : "DBName" },
                   "AllocatedStorage" : "100",
                   "DBInstanceClass" : "db.t2.micro",
                   "Engine" : "MySQL",
@@ -880,15 +881,16 @@
                  "Type": "AWS::CloudWatch::Alarm",
                  "Properties": {
                     "EvaluationPeriods": "1",
-                    "Statistic": "Average",
+                    "Statistic": "SampleCount",
                     "Threshold": "1",
+                    "TreatMissingData": "notBreaching",
                     "AlarmDescription": "Alarm no instances in LoadBalancer",
-                    "Period": "60",
+                    "Period": "300",
                     "AlarmActions": [ { "Ref": "AlarmNotificationTopic" } ],
                     "Namespace": "AWS/ApplicationELB",
                     "Dimensions": [ {
-                       "Name": "ApplicationELB",
-                       "Value": { "Ref": "PublicApplicationLoadBalancer" }
+                       "Name": "LoadBalancer",
+                       "Value": { "Fn::GetAtt" : [ "PublicApplicationLoadBalancer", "LoadBalancerFullName" ]}
                     } ],
                     "ComparisonOperator": "GreaterThanOrEqualToThreshold",
                     "MetricName": "HTTPCode_ELB_5XX_Count"
