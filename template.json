@@ -655,12 +655,12 @@
   "ALBTargetGroup" : {
     "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
     "Properties" : {
-      "HealthCheckIntervalSeconds" : 90,
-      "HealthCheckTimeoutSeconds" : 60,
+      "HealthCheckIntervalSeconds" : 60,
+      "HealthCheckTimeoutSeconds" : 10,
       "HealthyThresholdCount" : 3,
       "Port" : 80,
       "Protocol" : "HTTP",
-      "UnhealthyThresholdCount" : 5,
+      "UnhealthyThresholdCount" : 2,
       "VpcId" : {"Ref" : "VPC"}
     }
   },
@@ -684,6 +684,7 @@
       "MinSize" : "2",
       "MaxSize" : "10",
       "DesiredCapacity" : "2",
+      "HealthCheckType" : "ELB",
       "TargetGroupARNs" : [ { "Ref" : "ALBTargetGroup" } ],
       "HealthCheckGracePeriod" : "120",
       "Tags" : [ { "Key" : "Name", "Value" : "webserver-ASG", "PropagateAtLaunch" : "true" } ]
