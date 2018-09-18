@@ -25,6 +25,11 @@
       "Type": "AWS::EC2::KeyPair::KeyName",
       "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
     },
+    "DBName": {
+      "Description" : "The name to use for the database",
+      "Type": "String",
+      "Default" : "Onica"
+    },
     "DBUser": {
       "Description" : "User Name for the database",
       "Type": "String",
@@ -566,7 +571,48 @@
         "NetworkAclId" : { "Ref" : "NetworkAclPrivate" }
       }
     },
-
+    "QAInstance" : {
+      "Type" : "AWS::EC2::Instance",
+      "DependsOn" : [ "Database", "EFSMountTarget01", "EFSMountTarget02" ],
+      "Properties" : {
+        "ImageId"        : "ami-0ff8a91507f77f867",
+        "InstanceType"   : { "Ref" : "QAType" },
+        "KeyName"        : { "Ref" : "KeyName" },
+        "Tags"           : [ {"Key" : "Name", "Value" : "QA-Build-Jump-ops"} ],
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+          "#!/bin/bash -xe\n",
+          "yum -y update\n",
+          "yum clean all\n",
+          "yum -y install httpd mysql php php-mysql git amazon-efs-utils nfs-utils\n",
+          "mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport",
+          { "Ref" : "EFS" },
+          ".us-east-1.amazonaws.com:/ /var/www/html/\n",
+          "git clone https://github.com/danielmassey/onica-app /var/www/onica-app\n",
+          "cp -r /var/www/onica-app/* /var/www/html/\n",
+          "mv /var/www/html/wp-config-sample.php /var/www/html/wp-config.php\n",
+          "chown -R apache:apache /var/www/html\n",
+          "sed -i 's/database_name_here/",
+          { "Ref" : "DBName" },
+          "/g' /var/www/html/wp-config.php\n",
+          "sed -i 's/database_username_here/",
+          { "Ref" : "DBUser" },
+          "/g' /var/www/html/wp-config.php\n",
+          "sed -i 's/database_password_here/",
+          { "Ref" : "DBPass" },
+          "/g' /var/www/html/wp-config.php\n",
+          "sed -i 's/database_host_here/\n",
+          { "Fn::GetAtt" : [ "Database", "Endpoint.Address" ]},
+          "/g' /var/www/html/wp-config.php\n",
+          "/etc/init.d/httpd restart\n"
+          ]]}},
+          "NetworkInterfaces": [ {
+            "AssociatePublicIpAddress": "true",
+            "DeviceIndex": "0",
+            "GroupSet": [{ "Ref" : "QAInstanceSecurityGroup" }],
+            "SubnetId": { "Ref" : "SubnetPublic01" }
+          } ]
+      }
+    },
     "QAInstanceSecurityGroup" : {
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
@@ -633,8 +679,7 @@
       "DesiredCapacity" : "2",
       "TargetGroupARNs" : [ { "Ref" : "ALBTargetGroup" } ],
       "HealthCheckGracePeriod" : "120",
-      "MetricsCollection" : { "Granularity" : "5Minute", "Metrics" : [ "CPUUtilization" ] },
-      "Tags" : [ { "Key" : "Network", "Value" : "Public", "PropagateAtLaunch" : "true" } ]
+      "Tags" : [ { "Key" : "Name", "Value" : "webserver-ASG", "PropagateAtLaunch" : "true" } ]
     }
   },
   "ScaleUpPolicy" : {
@@ -652,12 +697,12 @@
         "EvaluationPeriods": "3",
         "Statistic": "Average",
         "Threshold": "80",
-        "AlarmDescription": "Alarm if CPU too high or metric disappears indicating instance is down",
+        "AlarmDescription": "Alarm if CPU too high",
         "Period": "60",
         "AlarmActions": [ { "Ref": "ScaleUpPolicy" } ],
         "Namespace": "AWS/EC2",
         "Dimensions": [ {
-           "Name": "WebServerFleet",
+           "Name": "AutoScalingGroupName",
            "Value": { "Ref": "WebServerFleet" }
         } ],
         "ComparisonOperator": "GreaterThanThreshold",
@@ -679,12 +724,12 @@
         "EvaluationPeriods": "5",
         "Statistic": "Average",
         "Threshold": "60",
-        "AlarmDescription": "Alarm if CPU is low or metric disappears indicating instance is down",
+        "AlarmDescription": "Alarm if CPU is low",
         "Period": "60",
         "AlarmActions": [ { "Ref": "ScaleDownPolicy" } ],
         "Namespace": "AWS/EC2",
         "Dimensions": [ {
-           "Name": "WebServerFleet",
+           "Name": "AutoScalingGroupName",
            "Value": { "Ref": "WebServerFleet" }
         } ],
         "ComparisonOperator": "LessThanThreshold",
@@ -693,21 +738,22 @@
   },
   "WebServerLaunchConfig"  : {
     "Type" : "AWS::AutoScaling::LaunchConfiguration",
-    "DependsOn" : "Database",
+    "DependsOn" : [ "Database", "EFSMountTarget01", "EFSMountTarget02" ],
     "Properties" : {
       "ImageId"        : "ami-0ff8a91507f77f867",
       "SecurityGroups" : [ { "Ref" : "WebServerSecurityGroup" } ],
       "InstanceType"   : { "Ref" : "WebServerInstanceType" },
       "KeyName"        : { "Ref" : "KeyName" },
-      "AssociatePublicIpAddress" : "true",
       "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
-             "#!/bin/bash -xe\n",
-             "yum -y update\n",
-             "yum clean all\n",
-             "yum -y install httpd\n",
-             "echo hello > /var/www/html/index.html\n",
-             "/etc/init.d/httpd start\n"
-        ]]}}
+        "#!/bin/bash -xe\n",
+        "yum -y update\n",
+        "yum clean all\n",
+        "yum -y install httpd mysql php php-mysql git amazon-efs-utils nfs-utils\n",
+        "mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport",
+        { "Ref" : "EFS" },
+        ".us-east-1.amazonaws.com:/ /var/www/html/\n",
+        "/etc/init.d/httpd restart\n"
+        ]]}},
     }
   },
     "WebServerSecurityGroup" : {
@@ -734,7 +780,7 @@
                         }],
                         "Enabled" : "true",
                         "Comment" : "Onica cloudfront to LB",
-                        "DefaultRootObject" : "index.html",
+                        "DefaultRootObject" : "index.php",
                         "DefaultCacheBehavior" : {
                             "TargetOriginId" : "PublicApplicationLoadBalancer",
                             "ForwardedValues" : {
@@ -780,7 +826,39 @@
                   "VPCSecurityGroups" : [ { "Ref" : "DBInstanceSecurityGroup" } ],
                   "Tags" : [ { "Key" : "Name", "Value" : "My SQL Database" } ]
                }
-            }
+            },
+            "EFSMountTarget01": {
+              "Type": "AWS::EFS::MountTarget",
+              "Properties": {
+                "FileSystemId": { "Ref": "EFS" },
+                "SubnetId": { "Ref": "SubnetPrivate01" },
+                "SecurityGroups": [ { "Ref": "EFSSecurityGroup" } ]
+              }
+            },
+            "EFSMountTarget02": {
+              "Type": "AWS::EFS::MountTarget",
+              "Properties": {
+                "FileSystemId": { "Ref": "EFS" },
+                "SubnetId": { "Ref": "SubnetPrivate02" },
+                "SecurityGroups": [ { "Ref": "EFSSecurityGroup" } ]
+              }
+            },
+            "EFSSecurityGroup" : {
+              "Type" : "AWS::EC2::SecurityGroup",
+              "Properties" : {
+                "VpcId" : { "Ref" : "VPC" },
+                "GroupDescription" : "Enable SSH access via port 22",
+                "SecurityGroupIngress" : [
+                  { "IpProtocol" : "tcp", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0"}
+                 ]
+              }
+            },
+            "EFS" : {
+              "Type" : "AWS::EFS::FileSystem",
+              "Properties": {
+                              "Encrypted": false,
+                          }
+              }
 
  },
   "Outputs" : {
@@ -794,7 +872,7 @@
     },
     "DatabaseURL" : {
       "Description" : "CloudFront URL",
-      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "Database", "Endpoint.Address" ]}]]}
+      "Value" :  { "Fn::Join" : [ "", [ "", { "Fn::GetAtt" : [ "Database", "Endpoint.Address" ]}]]}
     }
   }
 }
