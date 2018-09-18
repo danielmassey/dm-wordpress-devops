@@ -42,6 +42,12 @@
       "MinLength": "8",
       "ConstraintDescription": "must be 8 or more characters long"
     },
+    "Email": {
+      "Description" : "Email address to send emails to",
+      "Type": "String",
+      "Default" : "danielmassey1@gmail.com",
+      "ConstraintDescription": "must be a valid email"
+    },
     "SSHLocation" : {
       "Description" : "The office gateway IP address to allow SSH to the EC2 QA instance",
       "Type": "String",
@@ -858,6 +864,35 @@
               "Properties": {
                               "Encrypted": false,
                           }
+              },
+              "AlarmNotificationTopic": {
+                    "Type": "AWS::SNS::Topic",
+                    "Properties": {
+                        "Subscription": [
+                            {
+                                "Endpoint": { "Ref": "Email" },
+                                "Protocol": "email"
+                            }
+                        ]
+                    }
+                },
+              "LoadBalancerNoInstance": {
+                 "Type": "AWS::CloudWatch::Alarm",
+                 "Properties": {
+                    "EvaluationPeriods": "1",
+                    "Statistic": "Average",
+                    "Threshold": "1",
+                    "AlarmDescription": "Alarm no instances in LoadBalancer",
+                    "Period": "60",
+                    "AlarmActions": [ { "Ref": "AlarmNotificationTopic" } ],
+                    "Namespace": "AWS/ApplicationELB",
+                    "Dimensions": [ {
+                       "Name": "ApplicationELB",
+                       "Value": { "Ref": "PublicApplicationLoadBalancer" }
+                    } ],
+                    "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                    "MetricName": "HTTPCode_ELB_5XX_Count"
+                 }
               }
 
  },
