@@ -586,7 +586,7 @@
           "yum -y install httpd mysql php php-mysql git amazon-efs-utils nfs-utils\n",
           "mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ",
           { "Ref" : "EFS" },
-          ".us-east-1.amazonaws.com:/ /var/www/html/\n",
+          "efs.us-east-1.amazonaws.com:/ /var/www/html/\n",
           "git clone https://github.com/danielmassey/onica-app /var/www/onica-app\n",
           "cp -r /var/www/onica-app/* /var/www/html/\n",
           "mv /var/www/html/wp-config-sample.php /var/www/html/wp-config.php\n",
@@ -751,7 +751,7 @@
         "yum -y install httpd mysql php php-mysql git amazon-efs-utils nfs-utils\n",
         "mount -t nfs -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ",
         { "Ref" : "EFS" },
-        ".us-east-1.amazonaws.com:/ /var/www/html/\n",
+        "efs.us-east-1.amazonaws.com:/ /var/www/html/\n",
         "/etc/init.d/httpd restart\n"
         ]]}},
     }
