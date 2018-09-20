@@ -488,7 +488,7 @@
         "Protocol" : "6",
         "RuleAction" : "allow",
         "Egress" : "false",
-        "CidrBlock" : "0.0.0.0/16",
+        "CidrBlock" : "0.0.0.0/0",
         "PortRange" : {"From" : "80", "To" : "80"}
       }
     },
@@ -601,6 +601,9 @@
       "Port" : 80,
       "Protocol" : "HTTP",
       "UnhealthyThresholdCount" : 2,
+      "Matcher" : {
+        "HttpCode" : "200,302"
+        },
       "VpcId" : {"Ref" : "VPC"}
     }
   },
