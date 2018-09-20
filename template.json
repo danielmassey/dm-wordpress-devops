@@ -387,55 +387,55 @@
       }
     },
 
-    "NetworkAclWAN" : {
+    "NetworkAclPublic" : {
       "Type" : "AWS::EC2::NetworkAcl",
       "Properties" : {
         "VpcId" : {"Ref" : "VPC"},
         "Tags" : [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
-          {"Key" : "Name", "Value" : "WAN ACL" }
+          {"Key" : "Name", "Value" : "Public ACL" }
         ]
       }
     },
-    "InboundHTTPNetworkAclEntry" : {
+    "InboundACLNATPublic" : {
       "Type" : "AWS::EC2::NetworkAclEntry",
       "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclWAN"},
+        "NetworkAclId" : {"Ref" : "NetworkAclPublic"},
         "RuleNumber" : "100",
-        "Protocol" : "-1",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : {"From" : "1024", "To" : "65535"}
+      }
+    },
+    "InboundACLHTMLPublic" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : {"Ref" : "NetworkAclPublic"},
+        "RuleNumber" : "101",
+        "Protocol" : "6",
         "RuleAction" : "allow",
         "Egress" : "false",
         "CidrBlock" : "0.0.0.0/0",
         "PortRange" : {"From" : "80", "To" : "80"}
       }
     },
-    "InboundSSHNetworkAclEntry" : {
+    "InboundACLSSHPublic" : {
       "Type" : "AWS::EC2::NetworkAclEntry",
       "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclWAN"},
-        "RuleNumber" : "101",
+        "NetworkAclId" : {"Ref" : "NetworkAclPublic"},
+        "RuleNumber" : "102",
         "Protocol" : "6",
         "RuleAction" : "allow",
         "Egress" : "false",
-        "CidrBlock" : "0.0.0.0/0",
+        "CidrBlock" : { "Ref" : "SSHLocation"},
         "PortRange" : {"From" : "22", "To" : "22"}
       }
     },
-    "InboundResponsePortsNetworkAclEntry" : {
+    "OutBoundACLPublic" : {
       "Type" : "AWS::EC2::NetworkAclEntry",
       "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclWAN"},
-        "RuleNumber" : "102",
-        "Protocol" : "6",
-        "RuleAction" : "allow",
-        "Egress" : "false",
-        "CidrBlock" : "0.0.0.0/0",
-        "PortRange" : {"From" : "1024", "To" : "65535"}
-      }
-    },
-    "OutBoundHTTPNetworkAclEntry" : {
-      "Type" : "AWS::EC2::NetworkAclEntry",
-      "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclWAN"},
+        "NetworkAclId" : {"Ref" : "NetworkAclPublic"},
         "RuleNumber" : "100",
         "Protocol" : "-1",
         "RuleAction" : "allow",
@@ -443,43 +443,19 @@
         "CidrBlock" : "0.0.0.0/0",
         "PortRange" : {"From" : "80", "To" : "80"}
       }
-    },
-    "OutBoundHTTPSNetworkAclEntry" : {
-      "Type" : "AWS::EC2::NetworkAclEntry",
-      "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclWAN"},
-        "RuleNumber" : "101",
-        "Protocol" : "6",
-        "RuleAction" : "allow",
-        "Egress" : "true",
-        "CidrBlock" : "0.0.0.0/0",
-        "PortRange" : {"From" : "443", "To" : "443"}
-      }
-    },
-    "OutBoundResponsePortsNetworkAclEntry" : {
-      "Type" : "AWS::EC2::NetworkAclEntry",
-      "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclWAN"},
-        "RuleNumber" : "102",
-        "Protocol" : "6",
-        "RuleAction" : "allow",
-        "Egress" : "true",
-        "CidrBlock" : "0.0.0.0/0",
-        "PortRange" : {"From" : "1024", "To" : "65535"}
-      }
-    },
-    "SubnetNetworkAclAssociation" : {
+   },
+    "SubnetNetworkAclAssociationPublic01" : {
       "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
       "Properties" : {
         "SubnetId" : { "Ref" : "SubnetPublic01" },
-        "NetworkAclId" : { "Ref" : "NetworkAclWAN" }
+        "NetworkAclId" : { "Ref" : "NetworkAclPublic" }
       }
     },
-    "SubnetNetworkAclAssociation" : {
+    "SubnetNetworkAclAssociationPublic02" : {
       "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
       "Properties" : {
         "SubnetId" : { "Ref" : "SubnetPublic02" },
-        "NetworkAclId" : { "Ref" : "NetworkAclWAN" }
+        "NetworkAclId" : { "Ref" : "NetworkAclPublic" }
       }
     },
 
@@ -492,35 +468,11 @@
         ]
       }
     },
-    "InboundHTTPNetworkAclEntry" : {
+    "InboundACLNATPrivate" : {
       "Type" : "AWS::EC2::NetworkAclEntry",
       "Properties" : {
         "NetworkAclId" : {"Ref" : "NetworkAclPrivate"},
         "RuleNumber" : "100",
-        "Protocol" : "-1",
-        "RuleAction" : "allow",
-        "Egress" : "false",
-        "CidrBlock" : "0.0.0.0/0",
-        "PortRange" : {"From" : "80", "To" : "80"}
-      }
-    },
-    "InboundSSHNetworkAclEntry" : {
-      "Type" : "AWS::EC2::NetworkAclEntry",
-      "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclPrivate"},
-        "RuleNumber" : "101",
-        "Protocol" : "6",
-        "RuleAction" : "allow",
-        "Egress" : "false",
-        "CidrBlock" : "0.0.0.0/0",
-        "PortRange" : {"From" : "22", "To" : "22"}
-      }
-    },
-    "InboundResponsePortsNetworkAclEntry" : {
-      "Type" : "AWS::EC2::NetworkAclEntry",
-      "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclPrivate"},
-        "RuleNumber" : "102",
         "Protocol" : "6",
         "RuleAction" : "allow",
         "Egress" : "false",
@@ -528,7 +480,19 @@
         "PortRange" : {"From" : "1024", "To" : "65535"}
       }
     },
-    "OutBoundHTTPNetworkAclEntry" : {
+    "InboundACLHTMLPrivate" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : {"Ref" : "NetworkAclPrivate"},
+        "RuleNumber" : "101",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/16",
+        "PortRange" : {"From" : "80", "To" : "80"}
+      }
+    },
+    "OutBoundACLPrivate" : {
       "Type" : "AWS::EC2::NetworkAclEntry",
       "Properties" : {
         "NetworkAclId" : {"Ref" : "NetworkAclPrivate"},
@@ -537,41 +501,17 @@
         "RuleAction" : "allow",
         "Egress" : "true",
         "CidrBlock" : "0.0.0.0/0",
-        "PortRange" : {"From" : "80", "To" : "80"}
+        "PortRange" : {"From" : "0", "To" : "65535"}
       }
     },
-    "OutBoundHTTPSNetworkAclEntry" : {
-      "Type" : "AWS::EC2::NetworkAclEntry",
-      "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclPrivate"},
-        "RuleNumber" : "101",
-        "Protocol" : "6",
-        "RuleAction" : "allow",
-        "Egress" : "true",
-        "CidrBlock" : "0.0.0.0/0",
-        "PortRange" : {"From" : "443", "To" : "443"}
-      }
-    },
-    "OutBoundResponsePortsNetworkAclEntry" : {
-      "Type" : "AWS::EC2::NetworkAclEntry",
-      "Properties" : {
-        "NetworkAclId" : {"Ref" : "NetworkAclPrivate"},
-        "RuleNumber" : "102",
-        "Protocol" : "6",
-        "RuleAction" : "allow",
-        "Egress" : "true",
-        "CidrBlock" : "0.0.0.0/0",
-        "PortRange" : {"From" : "1024", "To" : "65535"}
-      }
-    },
-    "SubnetNetworkAclAssociation" : {
+    "SubnetNetworkAclAssociationPrivate01" : {
       "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
       "Properties" : {
-        "SubnetId" : { "Ref" : "SubnetPrvate01" },
+        "SubnetId" : { "Ref" : "SubnetPrivate01" },
         "NetworkAclId" : { "Ref" : "NetworkAclPrivate" }
       }
     },
-    "SubnetNetworkAclAssociation" : {
+    "SubnetNetworkAclAssociationPrivate02" : {
       "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
       "Properties" : {
         "SubnetId" : { "Ref" : "SubnetPrivate02" },
@@ -627,7 +567,7 @@
         "GroupDescription" : "Enable SSH access via port 22",
         "SecurityGroupIngress" : [
           {"IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : { "Ref" : "SSHLocation"}},
-          { "IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : "0.0.0.0/0"}
+          {"IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "CidrIp" : { "Ref" : "SSHLocation"}}
          ]
       }
     },
@@ -761,17 +701,19 @@
         { "Ref" : "EFS" },
         ".efs.us-east-1.amazonaws.com:/ /var/www/html/\n",
         "/etc/init.d/httpd restart\n"
-        ]]}},
+        ]]}}
     }
   },
     "WebServerSecurityGroup" : {
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
-        "GroupDescription" : "Allow access from load balancer and bastion as well as outbound HTTP and HTTPS traffic",
+        "GroupDescription" : "Allow http from App ELB and http/ssh from QA server",
         "VpcId" : { "Ref" : "VPC" },
         "SecurityGroupIngress" : [
           { "IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "SourceSecurityGroupId" : { "Ref" : "PublicLoadBalancerSecurityGroup" } } ,
-          { "IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "CidrIp" : { "Ref" : "SSHLocation" } } ]
+          { "IpProtocol" : "tcp", "FromPort" : "80", "ToPort" : "80", "SourceSecurityGroupId" : { "Ref" : "QAInstanceSecurityGroup" } } ,
+          { "IpProtocol" : "tcp", "FromPort" : "22", "ToPort" : "22", "SourceSecurityGroupId" : { "Ref" : "QAInstanceSecurityGroup" } }
+        ]
       }
     },
     "CloudfrontDistribution" : {
@@ -814,9 +756,10 @@
               "Type" : "AWS::EC2::SecurityGroup",
               "Properties" : {
                 "VpcId" : { "Ref" : "VPC" },
-                "GroupDescription" : "DB security group",
+                "GroupDescription" : "Allow 3306 from QA and web servers",
                 "SecurityGroupIngress" : [
-                  { "IpProtocol" : "tcp", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0"}
+                  { "IpProtocol" : "tcp", "FromPort" : "3306", "ToPort" : "3306", "SourceSecurityGroupId" : { "Ref" : "WebServerSecurityGroup" } } ,
+                  { "IpProtocol" : "tcp", "FromPort" : "3306", "ToPort" : "3306", "SourceSecurityGroupId" : { "Ref" : "QAInstanceSecurityGroup" } }
                  ]
               }
             },
@@ -855,16 +798,17 @@
               "Type" : "AWS::EC2::SecurityGroup",
               "Properties" : {
                 "VpcId" : { "Ref" : "VPC" },
-                "GroupDescription" : "Enable SSH access via port 22",
+                "GroupDescription" : "Enable NFS from web and QA SGs",
                 "SecurityGroupIngress" : [
-                  { "IpProtocol" : "tcp", "FromPort" : "0", "ToPort" : "65535", "CidrIp" : "0.0.0.0/0"}
+                  { "IpProtocol" : "tcp", "FromPort" : "2049", "ToPort" : "2049", "SourceSecurityGroupId" : { "Ref" : "WebServerSecurityGroup" } } ,
+                  { "IpProtocol" : "tcp", "FromPort" : "2049", "ToPort" : "2049", "SourceSecurityGroupId" : { "Ref" : "QAInstanceSecurityGroup" } }
                  ]
               }
             },
             "EFS" : {
               "Type" : "AWS::EFS::FileSystem",
               "Properties": {
-                              "Encrypted": false,
+                              "Encrypted": false
                           }
               },
               "AlarmNotificationTopic": {
